@@ -1,0 +1,313 @@
+# PROJECT: AgriShare
+Farm equipment rental platform. Small farmers rent machines from owners.
+Responsive website and installable PWA from one codebase. Six languages.
+Every tool and service must be free.
+
+Work in phases. Finish each phase completely before starting the next.
+Do not write test files or run test suites. Do not stop to ask questions;
+make reasonable decisions and record them in docs/DECISIONS.md.
+
+## 0. RULES
+- Every dependency free and open source. No paid APIs or SaaS.
+- No placeholder code, no TODO stubs, no "implement later". Every listed feature works.
+- No hardcoded secrets. Use .env with .env.example.
+- All user-facing strings go through i18n. No hardcoded English in components.
+- Money is integer paise everywhere. Never floats.
+- Code is typed, consistently formatted, and commented where logic is non-obvious.
+
+## 1. STACK (fixed)
+Client (/client): React 18, Vite, TypeScript, Tailwind CSS, React Router v6,
+TanStack Query, Zustand, react-i18next + i18next, Leaflet + OpenStreetMap,
+vite-plugin-pwa, Framer Motion, Lucide React.
+
+Server (/server): Node 20, Express, TypeScript, Prisma, PostgreSQL 16,
+jsonwebtoken, bcryptjs, Zod, Multer, Sharp, node-cron, Helmet, cors,
+express-rate-limit, Pino.
+
+Shared (/shared): constants.ts and types.ts used by both sides.
+
+Distance: Haversine in dsa/geo.ts. Road distance via Dijkstra over the
+location graph. Optional OSRM demo server with Haversine fallback.
+
+Payments: internal double-entry wallet. PaymentProvider interface with a
+MockProvider that marks top-ups successful immediately.
+
+## 2. FOLDER STRUCTURE (create exactly this, every folder gets its files)
+agrishare/
+├── client/
+│   ├── public/icons/ (icon-192.png, icon-512.png, icon-maskable-512.png, favicon.svg)
+│   ├── public/locales/{en,hi,kn,ta,te,mr}/translation.json
+│   ├── src/
+│   │   ├── app/ (App.tsx, router.tsx, providers.tsx, RequireRole.tsx)
+│   │   ├── components/
+│   │   │   ├── ui/ (Button, Card, Input, Modal, Badge, Toast, Skeleton, EmptyState, index.ts)
+│   │   │   ├── layout/ (AppShell, Navbar, BottomNav, Footer, LanguageSwitcher, ThemeToggle)
+│   │   │   ├── machines/ (MachineCard, MachineForm, ImageUploader, CapabilityPicker)
+│   │   │   ├── search/ (SearchBar, Autocomplete, RankedResultsTabs, FilterPanel, WeightSlider)
+│   │   │   ├── booking/ (SlotPicker, BookingCard, BookingStatusBadge, BookingTimeline, PriceBreakdown)
+│   │   │   └── map/ (MachineMap.tsx)
+│   │   ├── pages/
+│   │   │   ├── Landing.tsx, Login.tsx, Register.tsx, Profile.tsx, NotFound.tsx
+│   │   │   ├── farmer/ (Search, MachineDetail, MyBookings, Wallet)
+│   │   │   ├── owner/ (Dashboard, MyMachines, AddMachine, Requests, Earnings)
+│   │   │   └── admin/ (Overview, Users, Penalties)
+│   │   ├── hooks/ (useAuth, useDebounce, useGeolocation, useTheme)
+│   │   ├── services/ (api, auth.service, user.service, machine.service,
+│   │   │              search.service, booking.service, wallet.service,
+│   │   │              rating.service, admin.service)
+│   │   ├── store/ (authStore.ts, uiStore.ts)
+│   │   ├── lib/ (formatters.ts, i18n.ts, validators.ts, queryKeys.ts)
+│   │   ├── styles/ (globals.css, theme.css)
+│   │   ├── vite-env.d.ts
+│   │   └── main.tsx
+│   ├── index.html, vite.config.ts, tailwind.config.ts, postcss.config.js,
+│   ├── tsconfig.json, .eslintrc.cjs, package.json
+├── server/
+│   ├── prisma/ (schema.prisma, seed.ts)
+│   ├── src/
+│   │   ├── config/ (env.ts, db.ts, logger.ts)
+│   │   ├── middleware/ (auth, role, validate, error, rateLimit, upload — .ts each)
+│   │   ├── modules/
+│   │   │   ├── auth/ (routes, controller, service, schemas)
+│   │   │   ├── users/ (routes, controller, service, schemas)
+│   │   │   ├── machines/ (routes, controller, service, schemas)
+│   │   │   ├── search/ (routes, controller, service, schemas)
+│   │   │   ├── bookings/ (routes, controller, service, schemas)
+│   │   │   ├── wallet/ (routes, controller, service, schemas, ledger.ts,
+│   │   │   │            payments/PaymentProvider.ts, payments/MockProvider.ts)
+│   │   │   ├── penalties/ (penalties.rules.ts, penalties.service.ts, penalties.routes.ts)
+│   │   │   ├── ratings/ (routes, service, schemas)
+│   │   │   └── admin/ (routes, controller, service)
+│   │   ├── dsa/ (trie, maxHeap, graph, dijkstra, intervalIndex,
+│   │   │         bookingQueue, rankingEngine, geo — .ts each)
+│   │   ├── jobs/ (scheduler.ts, lateReturnJob.ts, cleanupJob.ts)
+│   │   ├── utils/ (ApiError.ts, asyncHandler.ts, pagination.ts, money.ts)
+│   │   ├── app.ts
+│   │   └── server.ts
+│   ├── uploads/.gitkeep
+│   ├── tsconfig.json, .eslintrc.cjs, package.json
+├── shared/ (constants.ts, types.ts)
+├── docs/ (DECISIONS.md, DSA_NOTES.md, API.md)
+├── docker-compose.yml, .env.example, .gitignore, README.md
+
+## 3. PHASES
+
+### PHASE 0: Bootstrap
+- Create the full folder tree above, with every file listed (empty files are
+  fine only where a later phase fills them; no folder left without files).
+- Initialize client (Vite React TS) and server (Node TS) packages.
+- shared/constants.ts: roles (FARMER, OWNER, ADMIN), machine categories
+  (TRACTOR, HARVESTER, SPRAYER, PLOUGH, SEEDER, ROTAVATOR, PUMP, THRESHER, OTHER),
+  booking statuses, penalty values, languages list.
+- docker-compose.yml: PostgreSQL 16 with named volume.
+- .env.example: DATABASE_URL, JWT_SECRET, JWT_EXPIRES_IN, PORT, CLIENT_URL,
+  UPLOAD_DIR, VITE_API_URL.
+- docs/DECISIONS.md: log every choice.
+- Done when: both packages install and TypeScript compiles.
+
+### PHASE 1: Database (Prisma)
+Models:
+- User: id, name, phone (unique), email?, passwordHash, role, language
+  (default "en"), village, district, state, latitude, longitude, isSuspended,
+  suspendedUntil, trustScore (float, default 5.0), createdAt
+- Machine: id, ownerId, name, category, description, capabilities (string[]),
+  brand, modelYear, horsepower, pricePerHour (paise int), minHours, deposit
+  (paise int), locationId, isActive, createdAt
+- MachineImage: id, machineId, url, sortOrder
+- Location: id, name, latitude, longitude, district, state
+- LocationEdge: id, fromLocationId, toLocationId, distanceKm (undirected)
+- Availability: id, machineId, startTime, endTime, isBlocked
+- Booking: id, machineId, farmerId, startTime, endTime, status (PENDING,
+  CONFIRMED, ACTIVE, RETURNED, LATE, CANCELLED, COMPLETED), totalAmount,
+  depositAmount, lateFeeAmount (default 0), returnedAt, createdAt
+- Wallet: id, userId (unique), balance (paise, never negative)
+- LedgerEntry: id, walletId, amount (signed paise), type (TOPUP,
+  BOOKING_HOLD, BOOKING_RELEASE, EARNING, LATE_FEE, DEPOSIT_REFUND,
+  DEPOSIT_FORFEIT), referenceId, createdAt
+- Rating: id, bookingId (unique), raterId, rateeId, score (1-5), comment, createdAt
+- Penalty: id, userId, bookingId?, type (LATE_RETURN, DAMAGE, NO_SHOW),
+  severity, note, createdAt
+- Warning: id, userId, reason, createdAt
+- Notification: id, userId, messageKey, params (json), isRead, createdAt
+
+Indexes: Booking(machineId, startTime, endTime), Machine(category, isActive),
+Location(latitude, longitude), Penalty(userId).
+
+seed.ts: 4 owners, 8 farmers, 3 admins, 30 machines (images from local
+placeholder files in uploads/seed/), 40 locations in a grid, edges between
+neighbors, wallets for all users.
+Done when: migration runs and seed completes.
+
+### PHASE 2: DSA engine (pure TypeScript, server/src/dsa/)
+No framework imports. Each file has a header comment with algorithm name,
+time complexity, and space complexity. Each export is typed and documented.
+
+1. trie.ts: insert, prefix search up to N results. Case-insensitive.
+   Handles Devanagari and Kannada by iterating code points.
+2. maxHeap.ts: generic binary heap with comparator. push, pop, peek, size.
+3. graph.ts: adjacency-list undirected weighted graph. addNode, addEdge, neighbors.
+4. dijkstra.ts: single-source shortest distances using maxHeap as min-heap
+   (inverted comparator). Returns distance and predecessor maps. Path
+   reconstruction function.
+5. intervalIndex.ts: sorted-by-start interval list per machine. add, remove,
+   hasOverlap(start, end) via binary search, findFreeSlots(start, end, minMinutes).
+   Half-open intervals [start, end).
+6. bookingQueue.ts: FIFO queue per machine. enqueue, dequeue, peek, size.
+7. rankingEngine.ts: min-max normalization with divide-by-zero guard. Three views:
+   CHEAPEST (by price), NEAREST (by distance), BALANCED (weighted score).
+   Top-K via maxHeap in O(n log K). Weights from request, normalized to sum 1.
+   Score: wPrice*(1-normPrice) + wDistance*(1-normDistance) + wRating*normRating.
+   Each result includes a plain-language reason string.
+8. geo.ts: haversine in km, guard for identical points.
+
+Also write DSA_NOTES.md with complexity for every function.
+Done when: everything compiles and every export has its header.
+
+### PHASE 3: Backend API
+Global: Express with Helmet, CORS (CLIENT_URL), JSON limit 1mb,
+express-rate-limit on /auth, global error handler returning
+{ error: { code, message } } via ApiError, Zod validation on every route,
+Pino request logging, static /uploads.
+
+Auth:
+- POST /auth/register (name, phone, password, role, village, district, state, language)
+- POST /auth/login (phone, password) returns JWT
+- GET /auth/me
+- Password min 8 chars, bcrypt cost 12.
+
+Users: GET and PATCH /users/me (profile, language, location, password).
+
+Machines (owner):
+- POST /machines (multipart, up to 6 images, Sharp to 1280px WebP)
+- GET /machines/mine, PATCH /machines/:id
+- DELETE /machines/:id (soft delete, blocked if future bookings exist)
+- POST /machines/:id/availability (block windows)
+
+Search (farmer):
+- GET /search/suggest?q= (trie, up to 8 names)
+- GET /search?category&query&lat&lng&radiusKm&startTime&endTime&sort
+  Filter active machines, drop conflicts via intervalIndex, compute distance
+  (haversine, or Dijkstra when both endpoints are graph nodes), return three
+  views from rankingEngine. Accept priceWeight, distanceWeight, ratingWeight.
+  Each result: machine, price, distance, rating, score, reason string.
+
+Bookings:
+- POST /bookings: through bookingQueue per machine. Check intervalIndex,
+  check wallet covers amount + deposit, BOOKING_HOLD ledger entry, status
+  CONFIRMED. Respect minHours.
+- GET /bookings/mine (farmer), GET /bookings/requests (owner)
+- PATCH /bookings/:id/start (owner marks handover, ACTIVE)
+- PATCH /bookings/:id/return (owner marks return; compute lateness, LATE_FEE,
+  release or forfeit deposit)
+- PATCH /bookings/:id/cancel (full refund if more than 24h before start, 50% otherwise)
+- On COMPLETED: EARNING credit to owner.
+
+Wallet:
+- GET /wallet, POST /wallet/topup (via PaymentProvider)
+- Every money move: two ledger entries in one Prisma transaction. Balance
+  checked inside the transaction.
+
+Penalties:
+- Late fee per started hour, from constants.ts.
+- First late return: warning. Three within 30 days: 7-day suspension.
+- Owner damage report with note.
+- Suspended users cannot book or list machines.
+
+Ratings: POST /ratings after COMPLETED, once per booking, moving average on trustScore.
+
+Admin: GET /admin/overview, GET /admin/users, POST /admin/users/:id/suspend,
+POST /admin/users/:id/unsuspend, GET /admin/penalties.
+
+Scheduler (node-cron): every 15 min, ACTIVE past endTime become LATE with
+LATE_RETURN penalty and warning. Daily, expire stale PENDING bookings.
+
+Done when: server starts, all routes mounted, TypeScript compiles.
+
+### PHASE 4: Design system
+Earthy, trustworthy, modern. Not a generic template.
+- Light palette: primary #1F4D2B, accent #E0A526, secondary text #6B4A2F,
+  background #FBF8EF, surface #FFFFFF, danger #B3261E, success #2E7D32.
+- Dark palette: background #0F1A12, surface #17251B, text #EDE8D8.
+  Defined as CSS variables in theme.css. Toggle stored in localStorage.
+- Fonts (Google Fonts): Noto Sans, Noto Sans Devanagari (hi, mr), Noto Sans
+  Kannada, Noto Sans Tamil, Noto Sans Telugu. Base 17px.
+- Tap targets minimum 44px. High contrast for outdoor use.
+- Components: 14px radius, soft shadows, Framer Motion fade and slide,
+  respecting prefers-reduced-motion.
+- Lucide icons only. Skeleton loaders, empty states, and toasts on every async action.
+
+### PHASE 5: Frontend pages and flows
+Routes:
+- Public: /, /login, /register
+- Farmer: /search, /search/:machineId, /bookings, /wallet
+- Owner: /owner, /owner/machines, /owner/machines/new, /owner/requests, /owner/earnings
+- Admin: /admin, /admin/users, /admin/penalties
+- Shared: /profile
+Role guards via RequireRole. Unauthorized redirects to /login.
+
+Landing: hero "Rent the machine. Skip the purchase.", three steps with icons,
+live count of available machines, language switcher visible, one CTA per role.
+
+Register: language first, then role as two large cards ("I farm" / "I own
+machines"), one field per step on mobile.
+
+Farmer search: debounced autocomplete. Filter panel (category chips, radius
+slider, date and time). Geolocation if allowed, else typed village. Three tabs:
+Cheapest, Nearest, Best Balance, each showing the reason line. Weight slider
+with live re-ranking. Map toggle with Leaflet.
+
+Machine detail: swipeable gallery, capability tags, owner rating, price per
+hour and deposit shown clearly, slot picker, confirmation showing total,
+deposit, and late-return rule in plain words.
+
+Owner: Dashboard (active bookings, monthly earnings, utilization). Add machine
+(multi-step: basics, capabilities, pricing, photos with reorder, map pin).
+Requests (Accept, Handover, Returned, damage report). Earnings ledger.
+
+Farmer bookings: timeline with status badges, cancel with refund preview.
+Wallet: balance card, top-up, history.
+Admin: stat cards, user table with search and suspend, penalty log.
+Profile: language, location, password.
+
+UX rules: inline validation in active language. Loading, success, and error
+states on every async action. Money as ₹ with Indian digit grouping.
+Distances in km, one decimal. Dates in user's locale.
+
+### PHASE 6: Localization
+- Files: client/public/locales/{lang}/translation.json, nested keys by page.
+- Server returns error codes. Client translates.
+- Switcher in navbar and register page. Choice saved to profile and localStorage.
+- English fallback. Dev-only warning for missing keys.
+- Categories and capabilities translated through the same system.
+
+### PHASE 7: PWA
+- Manifest: name and short_name "AgriShare", theme #1F4D2B, background #FBF8EF,
+  display standalone, start_url "/", icons 192, 512, maskable.
+- Service worker: precache app shell. Images cache-first (max 100 entries).
+  API GET network-first with fallback.
+- Offline page in active language, showing last-viewed bookings.
+- Install banner after second visit, dismissible.
+- Phones: bottom nav (Search, Bookings, Wallet, Profile). Desktop: top navbar.
+
+### PHASE 8: Integration
+- Every frontend service wired to its backend route. Query keys match invalidation.
+- Auth: token in memory and localStorage, restored on load, logout on 401.
+- Full booking flow works: search, slot, book, wallet hold, owner accepts,
+  handover, return, earnings credited, rating prompt.
+- Role checks enforced server-side, not only hidden in UI.
+- Remove dead code, unused imports, console.log.
+- Done when every page is reachable and every button performs its action.
+
+### PHASE 9: Documentation pass
+- Write docs/API.md with every endpoint, request shape, and response shape.
+- Make sure README.md matches the code. Every algorithm named exists in server/src/dsa/.
+- Confirm TypeScript compiles for client and server. Fix only compile errors.
+- Confirm client production build generates the manifest and service worker.
+
+## 4. QUALITY BAR
+- Zero TypeScript errors.
+- No console errors during the main booking flow.
+- Money never a float. Balances never negative.
+- Every API error returns a message key the UI can translate.
+- UI looks designed: consistent spacing, one accent color used sparingly,
+  real imagery on machine cards, no default browser styling visible.
